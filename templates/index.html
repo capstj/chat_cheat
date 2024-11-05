@@ -3,40 +3,43 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Local Network Chat</title>
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.15.3/css/all.min.css">
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/normalize/8.0.1/normalize.min.css">
+    <title>hello</title>
+<!--    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.15.3/css/all.min.css">-->
+<!--    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/normalize/8.0.1/normalize.min.css">-->
     <style>
         body {
             font-family: Arial, sans-serif;
             margin: 0;
             padding: 20px;
-            background-color: #121212; /* Dark background */
-            color: #e0e0e0; /* Light text color */
+            background-color: #121212;
+            color: #e0e0e0;
+            display: flex;
         }
         #chat {
-            max-width: 95%;
-            margin: auto;
-            background: #1e1e1e; /* Darker chat background */
+            flex: 1;
+            max-width: 80%;
+            margin: 0 auto; /* Center the chat */
+            background: #1e1e1e;
             border-radius: 5px;
             padding: 20px;
             box-shadow: 0 2px 10px rgba(0, 0, 0, 0.3);
+            transition: margin-left 0.3s ease; /* Smooth transition for shifting */
         }
         #username, #room, #message, button {
             width: calc(100% - 20px);
             margin: 5px 0;
             padding: 10px;
             border-radius: 4px;
-            border: 1px solid #444; /* Dark border */
-            background-color: #2b2b2b; /* Input background */
-            color: #e0e0e0; /* Input text color */
+            border: 1px solid #444;
+            background-color: #2b2b2b;
+            color: #e0e0e0;
         }
         #messages {
             height: 300px;
             overflow-y: auto;
-            border: 1px solid #444; /* Dark border */
+            border: 1px solid #444;
             padding: 10px;
-            background: #2b2b2b; /* Message area background */
+            background: #2b2b2b;
             margin-bottom: 10px;
             border-radius: 5px;
         }
@@ -45,25 +48,88 @@
             padding: 8px;
             border-radius: 5px;
         }
-        .text { background-color: #333; } /* Darker background for text messages */
-        .code { background-color: #222; font-family: monospace; white-space: pre-wrap; } /* Darker background for code messages */
-        .system { color: #b0b0b0; font-style: italic; } /* Lighter color for system messages */
+        .text { background-color: #333; }
+        .code { background-color: #222; font-family: monospace; white-space: pre-wrap; }
+        .system { color: #b0b0b0; font-style: italic; }
         button {
             cursor: pointer;
-            background-color: #242b36; /* Button background color */
-            color: white; /* Button text color */
+            background-color: #242b36;
+            color: white;
             border: none;
         }
         button:hover {
-            background-color: #4c5461; /* Button hover color */
+            background-color: #4c5461;
+        }
+        #sidebar {
+            width: 250px;
+            max-width: 90%;
+            height: 100vh;
+            position: fixed;
+            left: -260px; /* Positioned slightly off-screen when retracted */
+            top: 0;
+            background-color: #1e1e1e;
+            padding: 20px;
+            transition: 0.3s;
+            box-shadow: 2px 0 5px rgba(0, 0, 0, 0.3);
+            overflow-y: auto;
+        }
+
+        #sidebar.active {
+            left: 0; /* Sidebar fully visible when active */
+        }
+
+        #chat.shifted {
+            margin-left: 250px; /* Shift chat to the right when sidebar is active */
+        }
+
+        /* Toggle Button Styling */
+        #toggleSidebar {
+            position: absolute;
+            top: 10px;
+            right: -38px; /* Position the button at the edge */
+            width: 60px; /* Fixed width */
+            height: 60px; /* Fixed height */
+            background-color: #333;
+            color: white;
+            border: none;
+            padding: 3px;
+            border-radius: 50%; /* Circle background */
+            cursor: pointer;
+            transition: background-color 0.3s, right 0.3s;
+            display: flex; /* Use flexbox for centering the icon */
+            align-items: center; /* Center vertically */
+            justify-content: center; /* Center horizontally */
+        }
+
+        #toggleSidebar i {
+            color: #e0e0e0; /* Icon color */
+            font-size: 24px; /* Adjust icon size */
+        }
+
+        #toggleSidebar:hover {
+            background-color: #4c5461; /* Hover background color */
+        }
+
+        #toggleSidebar:hover i {
+            color: #ffffff; /* Hover icon color */
         }
     </style>
 </head>
 <body>
 
+<!-- Toggle Button for Sidebar -->
+<div id="sidebar">
+    <button id="toggleSidebar">
+        <i class="fas fa-chevron-left"></i>
+    </button>
+    <br>
+    <h3>Available Rooms:</h3>
+    <ul id="availableRooms"></ul>
+</div>
+
 <div id="chat">
     <input type="text" id="username" placeholder="Enter your name" required>
-    <input type="text" id="room" placeholder="Room name" required>
+    <input type="text" id="room" placeholder="Or enter a room name to create/join" required>
     <button onclick="joinRoom()">Join Room</button>
 
     <div id="messages"></div>
@@ -71,12 +137,38 @@
     <textarea id="message" placeholder="Type your message... (Use ``` for code blocks)"></textarea>
     <button onclick="sendMessage()">Send Message</button>
 </div>
+<script src="/static/js/socket.io.min.js"></script>
 
-<script src="https://cdnjs.cloudflare.com/ajax/libs/socket.io/4.0.0/socket.io.min.js"></script>
 <script>
-    const socket = io('http://192.168.0.4:3001');
+    const serverIp = "{{ server_ip }}";
+    const serverPort = "{{ server_port }}";
+    const socket = io(`http://${serverIp}:${serverPort}`);
 
-    // Join a specific chat room
+    document.getElementById('toggleSidebar').onclick = function () {
+        const sidebar = document.getElementById('sidebar');
+        const chat = document.getElementById('chat');
+
+        sidebar.classList.toggle('active');
+        chat.classList.toggle('shifted'); // Toggle the shifted class on chat
+    };
+
+    // Display available rooms
+    socket.on('activeRooms', function(rooms) {
+        const availableRooms = document.getElementById("availableRooms");
+        availableRooms.innerHTML = '';
+
+        rooms.forEach(room => {
+            const roomItem = document.createElement('li');
+            roomItem.textContent = room;
+            roomItem.onclick = () => {
+                document.getElementById("room").value = room;
+                joinRoom();
+                document.getElementById('sidebar').classList.remove('active'); // Close sidebar after joining
+            };
+            availableRooms.appendChild(roomItem);
+        });
+    });
+
     function joinRoom() {
         const username = document.getElementById("username").value.trim();
         const room = document.getElementById("room").value.trim();
@@ -90,18 +182,12 @@
         }
     }
 
-    // Display incoming messages
     socket.on('message', function(msg) {
         displayMessage(msg.type === 'code'
             ? `<pre>${msg.content.replace(/```/g, '')}</pre>`
             : `<strong>${msg.sender}:</strong> ${msg.content}`, msg.type);
     });
 
-    // Display system notifications (e.g., user joining)
-    socket.on('userJoined', function(username) {
-    });
-
-    // Send a chat message
     function sendMessage() {
         const messageInput = document.getElementById("message");
         const message = messageInput.value.trim();
@@ -109,20 +195,19 @@
         const room = document.getElementById("room").value.trim();
 
         if (message && username && room) {
-            const isCode = /^```[\s\S]*```$/.test(message); // Check if message is code
+            const isCode = /^```[\s\S]*```$/.test(message);
             socket.emit('chatMessage', {
                 type: isCode ? 'code' : 'text',
                 content: message,
                 sender: username,
                 room: room
             });
-            messageInput.value = ''; // Clear input after sending
+            messageInput.value = '';
         } else {
             alert("Enter a message to send.");
         }
     }
 
-    // Helper function to display messages
     function displayMessage(content, type) {
         const messagesDiv = document.getElementById("messages");
         const messageDiv = document.createElement('div');
@@ -131,8 +216,9 @@
         messageDiv.innerHTML = content;
 
         messagesDiv.appendChild(messageDiv);
-        messagesDiv.scrollTop = messagesDiv.scrollHeight; // Auto-scroll to the latest message
+        messagesDiv.scrollTop = messagesDiv.scrollHeight;
     }
 </script>
+
 </body>
 </html>
